@@ -39,6 +39,16 @@
             <name>Alan Wright</name>
         </developer>
     </developers>
+    
+    <contributors>
+      <contributor>
+        <email>campers@gmail.com</email>
+        <name>Daniel Campagnoli</name>
+        <url>http://danielcampagnoli.com</url>
+        <organization>Software Engineers Toolbox</organization>
+        <organizationUrl>http://engineerstoolbox.com</organizationUrl>
+      </contributor>
+    </contributors>
 
     <properties>
         <host>http://localhost:8080</host>
@@ -61,9 +71,14 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.ning</groupId>
-            <artifactId>async-http-client</artifactId>
-            <version>1.9.8</version>
+            <groupId>co.paralleluniverse</groupId>
+            <artifactId>comsat-httpclient</artifactId>
+            <version>0.5.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.13</version>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
