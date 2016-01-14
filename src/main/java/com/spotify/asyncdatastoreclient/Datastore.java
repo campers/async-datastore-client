@@ -25,6 +25,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ByteArrayEntity;
 import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
@@ -75,17 +76,17 @@ public class Datastore implements Closeable {
 
   private Datastore(final DatastoreConfig config) {
     this.config = config;
-    //    final AsyncHttpClientConfig httpConfig = new AsyncHttpClientConfig.Builder()
-    //        .setConnectTimeout(config.getConnectTimeout())
-    //        .setRequestTimeout(config.getRequestTimeout())
-    //        .setMaxConnections(config.getMaxConnections())
-    //        .setMaxRequestRetry(config.getRequestRetry())
-    //        .setCompressionEnforced(true)
-    //        .build();
-    //    client = new AsyncHttpClient(httpConfig);
+
+    // TODO implement ning config which doesn't exist on apache http client
+    //    .setCompressionEnforced(true)
+
+    RequestConfig requestConfig = RequestConfig.custom()
+        .setConnectTimeout(config.getConnectTimeout())
+        .setConnectionRequestTimeout(config.getRequestTimeout()).build();
+
     client = FiberCloseableHttpAsyncClient.wrap(HttpAsyncClients.custom()
-        .setMaxConnPerRoute(config.getMaxConnections()).setMaxConnTotal(config.getMaxConnections())
-        .build());
+        .setDefaultRequestConfig(requestConfig).setMaxConnPerRoute(config.getMaxConnections())
+        .setMaxConnTotal(config.getMaxConnections()).build());
 
     client.start();
     prefixUri = String.format("%s/datastore/%s/datasets/%s/", config.getHost(),
@@ -141,15 +142,26 @@ public class Datastore implements Closeable {
   }
 
   private Future<HttpResponse> executeRequest(final String method, final ProtoHttpContent payload) {
+    int maxRetries = config.getRequestRetry();
+    int i = 0;
+    Exception exception = null;
+    ByteArrayEntity entity = new ByteArrayEntity(payload.getMessage().toByteArray());
+    while (i++ <= maxRetries) {
+      try {
+        HttpPost httpPost = new HttpPost(prefixUri + method);
+        httpPost.addHeader("Authorization", "Bearer " + accessToken);
+        httpPost.addHeader("Content-Type", "application/x-protobuf");
+        httpPost.addHeader("User-Agent", USER_AGENT);
+        httpPost.addHeader("Accept-Encoding", "gzip");
 
-    HttpPost httpPost = new HttpPost(prefixUri + method);
-    httpPost.addHeader("Authorization", "Bearer " + accessToken);
-    httpPost.addHeader("Content-Type", "application/x-protobuf");
-    httpPost.addHeader("User-Agent", USER_AGENT);
-    httpPost.addHeader("Accept-Encoding", "gzip");
-    httpPost.setEntity(new ByteArrayEntity(payload.getMessage().toByteArray()));
+        httpPost.setEntity(entity);
 
-    return client.execute(httpPost, null);
+        return client.execute(httpPost, null);
+      } catch (Exception e) {
+        exception = e;
+      }
+    }
+    return exceptionally(exception);
   }
 
   private InputStream streamResponse(final HttpResponse response) throws IOException {
@@ -190,7 +202,7 @@ public class Datastore implements Closeable {
    *
    * @return the result of the transaction request.
    */
-  public Future<TransactionResult> transactionAsync() {
+  public CompletableFuture<TransactionResult> transactionAsync() {
     return transactionAsync(IsolationLevel.SNAPSHOT);
   }
 

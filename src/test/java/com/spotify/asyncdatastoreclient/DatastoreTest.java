@@ -1,35 +1,35 @@
 /*
  * Copyright (c) 2011-2015 Spotify AB
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
 
 package com.spotify.asyncdatastoreclient;
 
 import com.google.api.services.datastore.client.DatastoreHelper;
-
 import org.junit.Before;
 import org.junit.After;
-
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 public abstract class DatastoreTest {
 
   public static final String DATASTORE_HOST = System.getProperty("host", "http://localhost:8080");
+
   public static final String DATASET_ID = System.getProperty("dataset", "async-test");
+
   public static final String NAMESPACE = System.getProperty("namespace", "test");
+
   public static final String ACCOUNT = System.getProperty("account");
+
   public static final String KEY_PATH = System.getProperty("keypath");
 
   protected static Datastore datastore;
@@ -41,12 +41,8 @@ public abstract class DatastoreTest {
   }
 
   private DatastoreConfig datastoreConfig() {
-    final DatastoreConfig.Builder config = DatastoreConfig.builder()
-        .connectTimeout(5000)
-        .requestTimeout(1000)
-        .maxConnections(5)
-        .requestRetry(3)
-        .host(DATASTORE_HOST)
+    final DatastoreConfig.Builder config = DatastoreConfig.builder().connectTimeout(5000)
+        .requestTimeout(1000).maxConnections(5).requestRetry(3).host(DATASTORE_HOST)
         .dataset(DATASET_ID);
 
     if (NAMESPACE != null) {
@@ -82,7 +78,7 @@ public abstract class DatastoreTest {
   }
 
   @After
-  public void after() {
+  public void after() throws IOException {
     datastore.close();
   }
 }
