@@ -6,7 +6,6 @@ A modern, feature-rich and tunable Java client library for [Google Cloud Datasto
 
 ## Requirements
 
-- Java 8
 - [Quasar](http://www.paralleluniverse.co/quasar/)
 
 ## Features
@@ -29,8 +28,8 @@ Add this to your pom.xml file
 ```xml
 <dependency>
   <groupId>com.spotify</groupId>
-  <artifactId>comsat-datastore</artifactId>
-  <version>1.0.1</version>
+  <artifactId>comsat-datastore-client</artifactId>
+  <version>1.0.0</version>
 </dependency>
 ```
 
@@ -61,10 +60,7 @@ final Insert insert = QueryBuilder.insert("employee", 1234567L)
     .value("age", 40)
     .value("workdays", ImmutableList.of("Monday", "Tuesday", "Friday"));
 
-// for asynchronous call...
-final ListenableFuture<MutationResult> resultAsync = datastore.executeAsync(insert);
 
-// ...or for synchronous
 final MutationResult result = datastore.execute(insert);
 ```
 
