@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2011-2015 Spotify AB
- * 
+ *
  * Copyright (c) 2016 Daniel Campagnoli, Software Engineers Toolbox
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -16,13 +16,10 @@
 
 package com.spotify.asyncdatastoreclient;
 
-import static java.util.concurrent.CompletableFuture.completedFuture;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
@@ -40,7 +37,6 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.http.protobuf.ProtoHttpContent;
 import com.google.api.services.datastore.DatastoreV1;
 import com.google.common.base.Throwables;
-import com.google.common.util.concurrent.Futures;
 import com.google.protobuf.ByteString;
 
 /**

@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2011-2015 Spotify AB
  *
+ * Copyright (c) 2016 Daniel Campagnoli, Software Engineers Toolbox
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
  *
@@ -59,21 +61,9 @@ public class InsertTest extends DatastoreTest {
     final Insert insert = QueryBuilder.insert("employee").value("fullname", "Fred Blinge")
         .value("age", 40, false);
 
-    final CompletableFuture<MutationResult> result = datastore.executeAsync(insert);
-
-    Futures.addCallback(result, new FutureCallback<MutationResult>() {
-
-      @Override
-      public void onSuccess(final MutationResult result) {
-        assertEquals("employee", result.getInsertKey().getKind());
-        assertTrue(result.getInsertKey().getId() > 0);
-      }
-
-      @Override
-      public void onFailure(final Throwable throwable) {
-        fail(Throwables.getRootCause(throwable).getMessage());
-      }
-    });
+    final MutationResult result = datastore.execute(insert);
+    assertEquals("employee", result.getInsertKey().getKind());
+    assertTrue(result.getInsertKey().getId() > 0);
   }
 
   @Test
