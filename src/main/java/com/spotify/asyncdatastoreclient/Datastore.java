@@ -1,11 +1,13 @@
 /*
  * Copyright (c) 2011-2015 Spotify AB
- *
+ * 
+ * Copyright (c) 2016 Daniel Campagnoli, Software Engineers Toolbox
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -593,12 +595,13 @@ public class Datastore implements Closeable {
   }
 
   static <T> CompletableFuture<T> exceptionally(HttpResponse httpResponse) {
+    int statusCode = httpResponse.getStatusLine().getStatusCode();
     try {
-      return exceptionally(httpResponse.getStatusLine().getStatusCode(),
-          EntityUtils.toString(httpResponse.getEntity(), "UTF-8"));
+      return exceptionally(statusCode, EntityUtils.toString(httpResponse.getEntity(), "UTF-8"));
     } catch (IOException e) {
       CompletableFuture<T> result = new CompletableFuture<>();
-      result.completeExceptionally(new DatastoreException(e));
+      result.completeExceptionally(new DatastoreException(statusCode,
+          "Error parsing HTTP response:" + e.getMessage()));
       return result;
     }
   }
