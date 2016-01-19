@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2011-2015 Spotify AB
- * 
+ *
  * Copyright (c) 2016 Daniel Campagnoli, Software Engineers Toolbox
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -27,6 +27,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 import org.apache.http.HttpResponse;
+import org.apache.http.ParseException;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ByteArrayEntity;
@@ -135,18 +136,17 @@ public class Datastore implements Closeable {
     }
   }
 
-  private boolean isSuccessful(final HttpResponse httpResponse) {
-    return isSuccessful(httpResponse.getStatusLine().getStatusCode());
+  private void checkSuccessful(final HttpResponse httpResponse) throws DatastoreException {
+    int statusCode = httpResponse.getStatusLine().getStatusCode();
+    if (statusCode >= 200 && statusCode < 300) {
+      exceptionally(httpResponse);
+    }
   }
 
-  private boolean isSuccessful(final int statusCode) {
-    return statusCode >= 200 && statusCode < 300;
-  }
-
-  private Future<HttpResponse> executeRequest(final String method, final ProtoHttpContent payload) {
+  private HttpResponse executeRequest(final String method, final ProtoHttpContent payload)
+      throws DatastoreException {
     int maxRetries = config.getRequestRetry();
     int i = 0;
-    Exception exception = null;
     ByteArrayEntity entity = new ByteArrayEntity(payload.getMessage().toByteArray());
     while (i++ <= maxRetries) {
       try {
@@ -158,12 +158,18 @@ public class Datastore implements Closeable {
 
         httpPost.setEntity(entity);
 
-        return client.execute(httpPost, null);
+        HttpResponse httpResponse = client.execute(httpPost, null).get();
+        checkSuccessful(httpResponse);
+
+        return httpResponse;
       } catch (Exception e) {
-        exception = e;
+        if (i == maxRetries) {
+          exceptionally(e);
+        }
       }
     }
-    return exceptionally(exception);
+    // Should never reach here
+    throw new DatastoreException("");
   }
 
   private InputStream streamResponse(final HttpResponse response) throws IOException {
@@ -228,11 +234,8 @@ public class Datastore implements Closeable {
         request.setIsolationLevel(DatastoreV1.BeginTransactionRequest.IsolationLevel.SNAPSHOT);
       }
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
-      httpResponse = executeRequest("beginTransaction", payload).get();
+      httpResponse = executeRequest("beginTransaction", payload);
 
-      if (!isSuccessful(httpResponse)) {
-        return exceptionally(httpResponse);
-      }
       final DatastoreV1.BeginTransactionResponse transaction = DatastoreV1.BeginTransactionResponse
           .parseFrom(streamResponse(httpResponse));
       return completedFuture(TransactionResult.build(transaction));
@@ -270,14 +273,11 @@ public class Datastore implements Closeable {
       final DatastoreV1.RollbackRequest.Builder request = DatastoreV1.RollbackRequest.newBuilder();
       final ByteString transaction = txn.get().getTransaction();
       if (transaction == null) {
-        return exceptionally("Invalid transaction.");
+        exceptionally("Invalid transaction.");
       }
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
-      HttpResponse httpResponse = executeRequest("rollback", payload).get();
+      HttpResponse httpResponse = executeRequest("rollback", payload);
 
-      if (!isSuccessful(httpResponse)) {
-        return exceptionally(httpResponse);
-      }
       final DatastoreV1.RollbackResponse rollback = DatastoreV1.RollbackResponse
           .parseFrom(streamResponse(httpResponse));
       return completedFuture(RollbackResult.build(rollback));
@@ -340,11 +340,8 @@ public class Datastore implements Closeable {
       final DatastoreV1.AllocateIdsRequest.Builder request = DatastoreV1.AllocateIdsRequest
           .newBuilder().addAllKey(statement.getPb(config.getNamespace()));
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
-      httpResponse = executeRequest("allocateIds", payload).get();
+      httpResponse = executeRequest("allocateIds", payload);
 
-      if (!isSuccessful(httpResponse)) {
-        return exceptionally(httpResponse);
-      }
       final DatastoreV1.AllocateIdsResponse allocate = DatastoreV1.AllocateIdsResponse
           .parseFrom(streamResponse(httpResponse));
       return completedFuture(AllocateIdsResult.build(allocate));
@@ -412,11 +409,8 @@ public class Datastore implements Closeable {
         request.setReadOptions(DatastoreV1.ReadOptions.newBuilder().setTransaction(transaction));
       }
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
-      httpResponse = executeRequest("lookup", payload).get();
+      httpResponse = executeRequest("lookup", payload);
 
-      if (!isSuccessful(httpResponse)) {
-        return exceptionally(httpResponse);
-      }
       final DatastoreV1.LookupResponse query = DatastoreV1.LookupResponse
           .parseFrom(streamResponse(httpResponse));
       return completedFuture(QueryResult.build(query));
@@ -488,11 +482,8 @@ public class Datastore implements Closeable {
         request.setMode(DatastoreV1.CommitRequest.Mode.NON_TRANSACTIONAL);
       }
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
-      httpResponse = executeRequest("commit", payload).get();
+      httpResponse = executeRequest("commit", payload);
 
-      if (!isSuccessful(httpResponse)) {
-        return exceptionally(httpResponse);
-      }
       final DatastoreV1.CommitResponse commit = DatastoreV1.CommitResponse
           .parseFrom(streamResponse(httpResponse));
       return completedFuture(MutationResult.build(commit));
@@ -562,11 +553,8 @@ public class Datastore implements Closeable {
         request.setReadOptions(DatastoreV1.ReadOptions.newBuilder().setTransaction(transaction));
       }
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
-      httpResponse = executeRequest("runQuery", payload).get();
+      httpResponse = executeRequest("runQuery", payload);
 
-      if (!isSuccessful(httpResponse)) {
-        return exceptionally(httpResponse);
-      }
       final DatastoreV1.RunQueryResponse query = DatastoreV1.RunQueryResponse
           .parseFrom(streamResponse(httpResponse));
       return completedFuture(QueryResult.build(query));
@@ -582,27 +570,20 @@ public class Datastore implements Closeable {
     return result;
   }
 
-  static <T> CompletableFuture<T> exceptionally(String message) {
-    CompletableFuture<T> result = new CompletableFuture<>();
-    result.completeExceptionally(new DatastoreException(message));
-    return result;
+  static void exceptionally(String message) throws DatastoreException {
+    throw new DatastoreException(message);
   }
 
-  static <T> CompletableFuture<T> exceptionally(int code, String message) {
-    CompletableFuture<T> result = new CompletableFuture<>();
-    result.completeExceptionally(new DatastoreException(code, message));
-    return result;
+  static void exceptionally(int code, String message) throws DatastoreException {
+    throw new DatastoreException(code, message);
   }
 
-  static <T> CompletableFuture<T> exceptionally(HttpResponse httpResponse) {
+  static void exceptionally(HttpResponse httpResponse) throws DatastoreException {
     int statusCode = httpResponse.getStatusLine().getStatusCode();
     try {
-      return exceptionally(statusCode, EntityUtils.toString(httpResponse.getEntity(), "UTF-8"));
+      exceptionally(statusCode, EntityUtils.toString(httpResponse.getEntity(), "UTF-8"));
     } catch (IOException e) {
-      CompletableFuture<T> result = new CompletableFuture<>();
-      result.completeExceptionally(new DatastoreException(statusCode,
-          "Error parsing HTTP response:" + e.getMessage()));
-      return result;
+      throw new DatastoreException(statusCode, "Error parsing HTTP response:" + e.getMessage());
     }
   }
 }
