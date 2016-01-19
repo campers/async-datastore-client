@@ -27,7 +27,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 import org.apache.http.HttpResponse;
-import org.apache.http.ParseException;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ByteArrayEntity;
@@ -138,7 +137,7 @@ public class Datastore implements Closeable {
 
   private void checkSuccessful(final HttpResponse httpResponse) throws DatastoreException {
     int statusCode = httpResponse.getStatusLine().getStatusCode();
-    if (statusCode >= 200 && statusCode < 300) {
+    if (!(statusCode >= 200 && statusCode < 300)) {
       exceptionally(httpResponse);
     }
   }
