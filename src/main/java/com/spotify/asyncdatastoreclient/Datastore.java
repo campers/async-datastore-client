@@ -1,13 +1,13 @@
 /*
  * Copyright (c) 2011-2015 Spotify AB
- *
+ * 
  * Copyright (c) 2016 Daniel Campagnoli, Software Engineers Toolbox
- *
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -138,7 +138,12 @@ public class Datastore implements Closeable {
   private void checkSuccessful(final HttpResponse httpResponse) throws DatastoreException {
     int statusCode = httpResponse.getStatusLine().getStatusCode();
     if (!(statusCode >= 200 && statusCode < 300)) {
-      exceptionally(httpResponse);
+      try {
+        throw new DatastoreException(statusCode, EntityUtils.toString(httpResponse.getEntity(),
+            "UTF-8"));
+      } catch (IOException e) {
+        throw new DatastoreException(statusCode, "Error parsing HTTP response:" + e.getMessage());
+      }
     }
   }
 
@@ -163,7 +168,7 @@ public class Datastore implements Closeable {
         return httpResponse;
       } catch (Exception e) {
         if (i == maxRetries) {
-          exceptionally(e);
+          throw new DatastoreException(e);
         }
       }
     }
@@ -183,9 +188,10 @@ public class Datastore implements Closeable {
    * The returned {@code TransactionResult} contains the transaction if the request is successful.
    *
    * @return the result of the transaction request.
+   * @throws DatastoreException
    */
   public TransactionResult transaction() throws DatastoreException {
-    return Futures.get(transactionAsync(IsolationLevel.SNAPSHOT), DatastoreException.class);
+    return transactionAsync(IsolationLevel.SNAPSHOT);
   }
 
   /**
@@ -196,10 +202,11 @@ public class Datastore implements Closeable {
    * @param isolationLevel
    *          the transaction isolation level to request.
    * @return the result of the transaction request.
+   * @throws DatastoreException
    */
   public TransactionResult transaction(final IsolationLevel isolationLevel)
       throws DatastoreException {
-    return Futures.get(transactionAsync(isolationLevel), DatastoreException.class);
+    return transactionAsync(isolationLevel);
   }
 
   /**
@@ -208,8 +215,9 @@ public class Datastore implements Closeable {
    * The returned {@code TransactionResult} contains the transaction if the request is successful.
    *
    * @return the result of the transaction request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<TransactionResult> transactionAsync() {
+  public TransactionResult transactionAsync() throws DatastoreException {
     return transactionAsync(IsolationLevel.SNAPSHOT);
   }
 
@@ -221,8 +229,10 @@ public class Datastore implements Closeable {
    * @param isolationLevel
    *          the transaction isolation level to request.
    * @return the result of the transaction request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<TransactionResult> transactionAsync(final IsolationLevel isolationLevel) {
+  public TransactionResult transactionAsync(final IsolationLevel isolationLevel)
+      throws DatastoreException {
     final HttpResponse httpResponse;
     try {
       final DatastoreV1.BeginTransactionRequest.Builder request = DatastoreV1.BeginTransactionRequest
@@ -237,9 +247,9 @@ public class Datastore implements Closeable {
 
       final DatastoreV1.BeginTransactionResponse transaction = DatastoreV1.BeginTransactionResponse
           .parseFrom(streamResponse(httpResponse));
-      return completedFuture(TransactionResult.build(transaction));
+      return TransactionResult.build(transaction);
     } catch (final Exception e) {
-      return exceptionally(e);
+      throw dsException(e);
     }
   }
 
@@ -251,9 +261,10 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction.
    * @return the result of the rollback request.
+   * @throws DatastoreException
    */
   public RollbackResult rollback(final TransactionResult txn) throws DatastoreException {
-    return Futures.get(rollbackAsync(completedFuture(txn)), DatastoreException.class);
+    return rollbackAsync(completedFuture(txn));
   }
 
   /**
@@ -264,24 +275,26 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction.
    * @return the result of the rollback request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<RollbackResult> rollbackAsync(
-      final CompletableFuture<TransactionResult> txn) {
+  public RollbackResult rollbackAsync(final CompletableFuture<TransactionResult> txn)
+      throws DatastoreException {
 
     try {
       final DatastoreV1.RollbackRequest.Builder request = DatastoreV1.RollbackRequest.newBuilder();
       final ByteString transaction = txn.get().getTransaction();
       if (transaction == null) {
-        exceptionally("Invalid transaction.");
+        throw new DatastoreException("Invalid transaction");
       }
+
       final ProtoHttpContent payload = new ProtoHttpContent(request.build());
       HttpResponse httpResponse = executeRequest("rollback", payload);
 
       final DatastoreV1.RollbackResponse rollback = DatastoreV1.RollbackResponse
           .parseFrom(streamResponse(httpResponse));
-      return completedFuture(RollbackResult.build(rollback));
+      return RollbackResult.build(rollback);
     } catch (Exception e) {
-      return exceptionally(e);
+      throw dsException(e);
     }
   }
 
@@ -294,10 +307,10 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction.
    * @return the result of the commit request.
+   * @throws DatastoreException
    */
   public MutationResult commit(final TransactionResult txn) throws DatastoreException {
-    return Futures.get(executeAsync((MutationStatement)null, completedFuture(txn)),
-        DatastoreException.class);
+    return executeAsync((MutationStatement)null, completedFuture(txn));
   }
 
   /**
@@ -309,9 +322,10 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction.
    * @return the result of the commit request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<MutationResult> commitAsync(
-      final CompletableFuture<TransactionResult> txn) {
+  public MutationResult commitAsync(final CompletableFuture<TransactionResult> txn)
+      throws DatastoreException {
     return executeAsync((MutationStatement)null, txn);
   }
 
@@ -321,9 +335,10 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the allocate ids request.
+   * @throws DatastoreException
    */
   public AllocateIdsResult execute(final AllocateIds statement) throws DatastoreException {
-    return Futures.get(executeAsync(statement), DatastoreException.class);
+    return executeAsync(statement);
   }
 
   /**
@@ -332,8 +347,9 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the allocate ids request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<AllocateIdsResult> executeAsync(final AllocateIds statement) {
+  public AllocateIdsResult executeAsync(final AllocateIds statement) throws DatastoreException {
     final HttpResponse httpResponse;
     try {
       final DatastoreV1.AllocateIdsRequest.Builder request = DatastoreV1.AllocateIdsRequest
@@ -343,10 +359,10 @@ public class Datastore implements Closeable {
 
       final DatastoreV1.AllocateIdsResponse allocate = DatastoreV1.AllocateIdsResponse
           .parseFrom(streamResponse(httpResponse));
-      return completedFuture(AllocateIdsResult.build(allocate));
+      return AllocateIdsResult.build(allocate);
 
     } catch (final Exception e) {
-      return exceptionally(e);
+      throw dsException(e);
     }
   }
 
@@ -356,9 +372,10 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
   public QueryResult execute(final KeyQuery statement) throws DatastoreException {
-    return Futures.get(executeAsync(statement), DatastoreException.class);
+    return executeAsync(statement);
   }
 
   /**
@@ -367,8 +384,9 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<QueryResult> executeAsync(final KeyQuery statement) {
+  public QueryResult executeAsync(final KeyQuery statement) throws DatastoreException {
     return executeAsync(statement, completedFuture(TransactionResult.build()));
   }
 
@@ -380,11 +398,11 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction to execute the query.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
   public QueryResult execute(final KeyQuery statement, final TransactionResult txn)
       throws DatastoreException {
-    return Futures.get(executeAsync(statement, CompletableFuture.completedFuture(txn)),
-        DatastoreException.class);
+    return executeAsync(statement, CompletableFuture.completedFuture(txn));
   }
 
   /**
@@ -395,9 +413,10 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction to execute the query.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<QueryResult> executeAsync(final KeyQuery statement,
-      final Future<TransactionResult> txn) {
+  public QueryResult executeAsync(final KeyQuery statement, final Future<TransactionResult> txn)
+      throws DatastoreException {
     try {
       final HttpResponse httpResponse;
       final DatastoreV1.Key key = statement.getKey().getPb(config.getNamespace());
@@ -412,10 +431,10 @@ public class Datastore implements Closeable {
 
       final DatastoreV1.LookupResponse query = DatastoreV1.LookupResponse
           .parseFrom(streamResponse(httpResponse));
-      return completedFuture(QueryResult.build(query));
+      return QueryResult.build(query);
 
     } catch (Exception e) {
-      return exceptionally(e);
+      throw dsException(e);
     }
   }
 
@@ -425,9 +444,10 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the mutation request.
+   * @throws DatastoreException
    */
   public MutationResult execute(final MutationStatement statement) throws DatastoreException {
-    return Futures.get(executeAsync(statement), DatastoreException.class);
+    return executeAsync(statement);
   }
 
   /**
@@ -436,8 +456,9 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the mutation request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<MutationResult> executeAsync(final MutationStatement statement) {
+  public MutationResult executeAsync(final MutationStatement statement) throws DatastoreException {
     return executeAsync(statement, CompletableFuture.completedFuture(TransactionResult.build()));
   }
 
@@ -449,11 +470,11 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction to execute the query.
    * @return the result of the mutation request.
+   * @throws DatastoreException
    */
   public MutationResult execute(final MutationStatement statement, final TransactionResult txn)
       throws DatastoreException {
-    return Futures.get(executeAsync(statement, CompletableFuture.completedFuture(txn)),
-        DatastoreException.class);
+    return executeAsync(statement, CompletableFuture.completedFuture(txn));
   }
 
   /**
@@ -464,9 +485,10 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction to execute the query.
    * @return the result of the mutation request.
+   * @throws DatastoreException
    */
-  public CompletableFuture<MutationResult> executeAsync(final MutationStatement statement,
-      final Future<TransactionResult> txn) {
+  public MutationResult executeAsync(final MutationStatement statement,
+      final Future<TransactionResult> txn) throws DatastoreException {
     try {
 
       final HttpResponse httpResponse;
@@ -485,9 +507,9 @@ public class Datastore implements Closeable {
 
       final DatastoreV1.CommitResponse commit = DatastoreV1.CommitResponse
           .parseFrom(streamResponse(httpResponse));
-      return completedFuture(MutationResult.build(commit));
+      return MutationResult.build(commit);
     } catch (Exception e) {
-      return exceptionally(e);
+      throw dsException(e);
     }
   }
 
@@ -497,9 +519,10 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
   public QueryResult execute(final Query statement) throws DatastoreException {
-    return Futures.get(executeAsync(statement), DatastoreException.class);
+    return executeAsync(statement);
   }
 
   /**
@@ -508,8 +531,9 @@ public class Datastore implements Closeable {
    * @param statement
    *          the statement to execute.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
-  public Future<QueryResult> executeAsync(final Query statement) {
+  public QueryResult executeAsync(final Query statement) throws DatastoreException {
     return executeAsync(statement, completedFuture(TransactionResult.build()));
   }
 
@@ -521,11 +545,11 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction to execute the query.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
   public QueryResult execute(final Query statement, final TransactionResult txn)
       throws DatastoreException {
-    return Futures.get(executeAsync(statement, CompletableFuture.completedFuture(txn)),
-        DatastoreException.class);
+    return executeAsync(statement, CompletableFuture.completedFuture(txn));
   }
 
   /**
@@ -536,8 +560,10 @@ public class Datastore implements Closeable {
    * @param txn
    *          the transaction to execute the query.
    * @return the result of the query request.
+   * @throws DatastoreException
    */
-  public Future<QueryResult> executeAsync(final Query statement, final Future<TransactionResult> txn) {
+  public QueryResult executeAsync(final Query statement, final Future<TransactionResult> txn)
+      throws DatastoreException {
     try {
 
       final HttpResponse httpResponse;
@@ -556,33 +582,15 @@ public class Datastore implements Closeable {
 
       final DatastoreV1.RunQueryResponse query = DatastoreV1.RunQueryResponse
           .parseFrom(streamResponse(httpResponse));
-      return completedFuture(QueryResult.build(query));
+      return QueryResult.build(query);
 
     } catch (Exception e) {
-      return exceptionally(e);
+      throw dsException(e);
     }
   }
 
-  static <T> CompletableFuture<T> exceptionally(Exception e) {
-    CompletableFuture<T> result = new CompletableFuture<>();
-    result.completeExceptionally(new DatastoreException(e));
-    return result;
+  private static DatastoreException dsException(Exception e) {
+    return new DatastoreException(e);
   }
 
-  static void exceptionally(String message) throws DatastoreException {
-    throw new DatastoreException(message);
-  }
-
-  static void exceptionally(int code, String message) throws DatastoreException {
-    throw new DatastoreException(code, message);
-  }
-
-  static void exceptionally(HttpResponse httpResponse) throws DatastoreException {
-    int statusCode = httpResponse.getStatusLine().getStatusCode();
-    try {
-      exceptionally(statusCode, EntityUtils.toString(httpResponse.getEntity(), "UTF-8"));
-    } catch (IOException e) {
-      throw new DatastoreException(statusCode, "Error parsing HTTP response:" + e.getMessage());
-    }
-  }
 }
