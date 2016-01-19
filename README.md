@@ -1,12 +1,17 @@
-# Asynchronous Google Datastore Client
+# Quasar Fiber blocking Google Datastore Client
+
+Forked from https://github.com/spotify/async-datastore-client
 
 A modern, feature-rich and tunable Java client library for [Google Cloud Datastore](https://cloud.google.com/datastore/docs/concepts/overview).
 
+## Requirements
+
+- Java 8
+- [Quasar](http://www.paralleluniverse.co/quasar/)
+
 ## Features
 
-- Supports a asynchronous (non blocking) design that returns
-[ListenableFutures](https://code.google.com/p/guava-libraries/wiki/ListenableFutureExplained) for all queries and mutations.
-- Also supports synchronous alternatives.
+- Synchronous API design using Quasar that uses light-weight fiber 'threads' for asynchronous I/O under the covers
 - Insulates the consumer from having to deal with Protobuf payloads.
 - Includes a simple `QueryBuilder` to construct natural looking queries.
 
@@ -14,10 +19,9 @@ A modern, feature-rich and tunable Java client library for [Google Cloud Datasto
 
 The current implementations of [Google Datastore Client](https://github.com/GoogleCloudPlatform/google-cloud-datastore)
 and [Google Cloud Java Client](https://github.com/GoogleCloudPlatform/gcloud-java)
-are synchronous, meaning they block when making HTTP calls to their backend.
-This client uses [async-http-client](https://github.com/AsyncHttpClient/async-http-client)
-and returns `ListenableFutures` which can be nicer to work with, especially
-running at scale.
+use blocking synchronous HTTP calls to their backend.
+This client uses [FiberCloseableHttpAsyncClient](http://docs.paralleluniverse.co/comsat/) which is
+Quasar fiber blocking version of the Apache Http Client 
 
 ## Usage
 
@@ -25,7 +29,7 @@ Add this to your pom.xml file
 ```xml
 <dependency>
   <groupId>com.spotify</groupId>
-  <artifactId>async-datastore-client</artifactId>
+  <artifactId>comsat-datastore</artifactId>
   <version>1.0.1</version>
 </dependency>
 ```
